@@ -38,8 +38,6 @@
         button:hover { background-color: #10ac84; }
         button.secondary { background-color: #57606f; }
         button.secondary:hover { background-color: #2f3542; }
-        button.danger { background-color: #ff4757; margin-top: 15px; }
-        button.danger:hover { background-color: #ff6b81; }
         
         #status-text { font-size: 20px; color: #ced6e0; text-align: center; padding: 20px;}
         #room-code-display { font-size: 36px; color: #ff9f43; font-weight: bold; letter-spacing: 2px; margin: 10px 0; }
@@ -109,7 +107,7 @@
         let gameRunning = false;
         let gameOver = false;
         let lastTapTime = Date.now();
-        let currentMaxTime = 3000;
+        const TIME_LIMIT = 3000; // Strictly fixed to 3 seconds per turn
         let animationId;
         
         // Visuals / Entity Arrays
@@ -219,9 +217,9 @@
             rematchBtn.classList.add('hidden');
             
             score = 0; scoreEl.innerText = score;
-            currentMaxTime = 3000;
             trails = []; particles = []; decoys = [];
             gameOver = false; gameRunning = false;
+            timeEl.innerText = "3.0"; // Reset UI visually
 
             // Start Countdown
             let count = 3;
@@ -258,17 +256,17 @@
                 ball.dx = (Math.random() > 0.5 ? 3 : -3);
                 ball.dy = (Math.random() > 0.5 ? 3 : -3);
                 
-                lastTapTime = Date.now();
+                lastTapTime = Date.now(); // Start 3.0 seconds!
             } else {
                 myTurn = false;
                 turnText.innerText = "Opponent's Turn...";
-                timeEl.innerText = "3.0";
             }
         }
 
         function passBall() {
             myTurn = false;
             score++; scoreEl.innerText = score;
+            timeEl.innerText = "3.0"; // Reset visually for the waiting player
             
             // Screen Shake & Particles
             shakeFrames = 10;
@@ -289,11 +287,8 @@
             score = currentScore;
             scoreEl.innerText = score;
 
-            // Mechanics changes based on score
             // 1. Shrink Ball (Down to 12px min)
             ball.r = Math.max(12, 25 - Math.floor(score / 3) * 2);
-            // 2. Shrink Timer (Down to 1.5 seconds min)
-            currentMaxTime = Math.max(1500, 3000 - Math.floor(score / 5) * 300);
             
             // Randomize Location
             ball.x = ball.r + Math.random() * (canvas.width - 2 * ball.r);
@@ -314,6 +309,8 @@
             
             myTurn = true;
             turnScreen.classList.add('hidden');
+            
+            // RESET EXACTLY TO 3.0 SECONDS
             lastTapTime = Date.now(); 
         }
 
@@ -364,7 +361,7 @@
             if (!gameRunning || !myTurn) return;
 
             // Timer check
-            let timeLeft = currentMaxTime - (Date.now() - lastTapTime);
+            let timeLeft = TIME_LIMIT - (Date.now() - lastTapTime);
             if (timeLeft <= 0) {
                 timeLeft = 0;
                 connection.send({ type: 'GAME_OVER_TIME' });
