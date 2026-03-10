@@ -3,85 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multiplayer Ball Tap</title>
-    <!-- Import PeerJS for purely front-end multiplayer -->
+    <title>Multiplayer Ball Tap - Extreme</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         body {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #1e1e2f;
-            color: #ffffff;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            overflow: hidden;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            height: 100vh; margin: 0; background-color: #1e1e2f; color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden;
         }
-        #game-ui { text-align: center; margin-bottom: 15px; }
-        h1 { margin: 0 0 10px 0; font-size: 26px; }
+        #game-ui { text-align: center; margin-bottom: 10px; }
+        h1 { margin: 0 0 5px 0; font-size: 24px; }
         .stats { font-size: 18px; font-weight: bold; }
         #time { color: #ff4757; }
         
-        #game-container {
-            position: relative;
-            width: 400px;
-            height: 400px;
-        }
+        #game-container { position: relative; width: 400px; height: 400px; }
         canvas {
-            background-color: #2f3542;
-            border: 4px solid #ffffff;
-            border-radius: 8px;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.5);
-            cursor: crosshair;
-            touch-action: none;
-            display: block;
+            background-color: #2f3542; border: 4px solid #ffffff; border-radius: 8px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.5); cursor: crosshair; touch-action: none; display: block;
         }
 
-        /* Overlay Menus */
+        /* Overlays */
         .overlay {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background-color: rgba(30, 30, 47, 0.95);
-            border-radius: 8px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 10;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(30, 30, 47, 0.95); border-radius: 8px;
+            display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 10;
         }
         .hidden { display: none !important; }
 
-        input {
-            padding: 10px;
-            font-size: 18px;
-            text-transform: uppercase;
-            text-align: center;
-            width: 150px;
-            margin-bottom: 10px;
-            border-radius: 5px;
-            border: none;
-        }
+        input { padding: 10px; font-size: 18px; text-transform: uppercase; text-align: center; width: 150px; margin-bottom: 10px; border-radius: 5px; border: none; }
         button {
-            margin: 5px;
-            padding: 12px 24px;
-            font-size: 16px;
-            font-weight: bold;
-            color: white;
-            background-color: #1dd1a1;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            width: 200px;
-            transition: background 0.2s;
+            margin: 5px; padding: 12px 24px; font-size: 16px; font-weight: bold; color: white;
+            background-color: #1dd1a1; border: none; border-radius: 5px; cursor: pointer; width: 200px; transition: background 0.2s;
         }
         button:hover { background-color: #10ac84; }
         button.secondary { background-color: #57606f; }
         button.secondary:hover { background-color: #2f3542; }
+        button.danger { background-color: #ff4757; margin-top: 15px; }
+        button.danger:hover { background-color: #ff6b81; }
         
         #status-text { font-size: 20px; color: #ced6e0; text-align: center; padding: 20px;}
-        #room-code-display { font-size: 32px; color: #ff9f43; font-weight: bold; letter-spacing: 2px; margin: 10px 0; }
+        #room-code-display { font-size: 36px; color: #ff9f43; font-weight: bold; letter-spacing: 2px; margin: 10px 0; }
+        #turn-text { font-size: 28px; color: #ff9f43; text-align: center; padding: 0 10px; }
     </style>
 </head>
 <body>
@@ -95,28 +57,29 @@
     </div>
 
     <div id="game-container">
-        
         <!-- Main Menu -->
         <div id="menu-screen" class="overlay">
             <button id="host-btn">Host Game</button>
             <div style="margin: 15px 0;">-- OR --</div>
             <input type="text" id="join-input" placeholder="ROOM CODE" maxlength="5">
             <button id="join-btn" class="secondary">Join Game</button>
+            <button id="fullscreen-btn" class="secondary" style="margin-top: 20px; width: 150px; font-size: 14px;">Toggle Fullscreen</button>
         </div>
 
-        <!-- Lobby / Waiting Screen -->
+        <!-- Lobby Screen -->
         <div id="lobby-screen" class="overlay hidden">
-            <div id="status-text">Connecting to server...</div>
+            <div id="status-text">Connecting...</div>
             <div id="room-code-display" class="hidden"></div>
             <div id="waiting-text" class="hidden">Waiting for opponent to join...</div>
         </div>
 
-        <!-- Turn Indicator Screen -->
+        <!-- Info / Turn / Game Over Screen -->
         <div id="turn-screen" class="overlay hidden">
-            <h2 id="turn-text" style="color: #ff9f43;">Opponent's Turn</h2>
+            <h2 id="turn-text">Opponent's Turn</h2>
+            <button id="rematch-btn" class="hidden">Play Again (Rematch)</button>
         </div>
 
-        <!-- The Game -->
+        <!-- Canvas -->
         <canvas id="gameCanvas" width="400" height="400"></canvas>
     </div>
 
@@ -126,7 +89,6 @@
         const scoreEl = document.getElementById('score');
         const timeEl = document.getElementById('time');
         
-        // UI Screens
         const menuScreen = document.getElementById('menu-screen');
         const lobbyScreen = document.getElementById('lobby-screen');
         const turnScreen = document.getElementById('turn-screen');
@@ -134,37 +96,50 @@
         const roomCodeDisplay = document.getElementById('room-code-display');
         const waitingText = document.getElementById('waiting-text');
         const turnText = document.getElementById('turn-text');
+        const rematchBtn = document.getElementById('rematch-btn');
 
-        // Multiplayer Variables
-        let peer;
-        let connection;
-        let myId = Math.random().toString(36).substring(2, 7).toUpperCase(); // 5-letter random code
+        // Multiplayer Networking Variables
+        let peer, connection;
+        let myId = Math.random().toString(36).substring(2, 7).toUpperCase(); 
+        let isHost = false;
         
-        // Game state variables
+        // Game State Variables
         let score = 0;
         let myTurn = false;
         let gameRunning = false;
         let gameOver = false;
         let lastTapTime = Date.now();
+        let currentMaxTime = 3000;
         let animationId;
-        const TIME_LIMIT = 3000; 
+        
+        // Visuals / Entity Arrays
+        let particles = [];
+        let trails = [];
+        let decoys = [];
+        let shakeFrames = 0;
 
-        // Ball object
         let ball = {
             x: 200, y: 200, r: 25,
             dx: 3, dy: 3,
             speedMultiplier: 1.05
         };
 
-        // --- MULTIPLAYER NETWORKING (PeerJS) ---
-        
-        // Host Game
+        // --- FULLSCREEN LOGIC ---
+        document.getElementById('fullscreen-btn').addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => console.log(err));
+            } else {
+                document.exitFullscreen();
+            }
+        });
+
+        // --- MULTIPLAYER SETUP ---
         document.getElementById('host-btn').addEventListener('click', () => {
+            isHost = true;
             menuScreen.classList.add('hidden');
             lobbyScreen.classList.remove('hidden');
             
             peer = new Peer(myId);
-            
             peer.on('open', (id) => {
                 statusText.innerText = "Room Created! Share this code:";
                 roomCodeDisplay.innerText = id;
@@ -172,191 +147,345 @@
                 waitingText.classList.remove('hidden');
             });
 
-            // When player 2 joins
             peer.on('connection', (conn) => {
                 connection = conn;
                 setupConnection();
-                // Host starts the game
-                setTimeout(() => {
-                    startGame(true); // Host gets first turn
-                    connection.send({ type: 'START_GAME' });
-                }, 1000);
+                setTimeout(() => initiateStartGame(true), 1000);
             });
         });
 
-        // Join Game
         document.getElementById('join-btn').addEventListener('click', () => {
             const joinId = document.getElementById('join-input').value.trim().toUpperCase();
-            if (joinId.length !== 5) { alert("Please enter a valid 5-letter code."); return; }
+            if (joinId.length !== 5) { alert("Enter a valid 5-letter code."); return; }
 
+            isHost = false;
             menuScreen.classList.add('hidden');
             lobbyScreen.classList.remove('hidden');
             statusText.innerText = "Connecting to Host...";
 
-            peer = new Peer(); // Joiner gets random ID
-            
+            peer = new Peer(); 
             peer.on('open', () => {
                 connection = peer.connect(joinId);
                 connection.on('open', () => {
                     setupConnection();
                     statusText.innerText = "Connected! Waiting for host to start...";
                 });
-                connection.on('error', () => alert('Connection failed.'));
             });
         });
 
         function setupConnection() {
             connection.on('data', (data) => {
-                if (data.type === 'START_GAME') {
-                    startGame(false); // Joiner waits for first turn
-                }
-                else if (data.type === 'PASS_BALL') {
-                    receiveBall(data.ballData, data.currentScore);
-                }
-                else if (data.type === 'GAME_OVER') {
-                    handleGameOver("You Win! Opponent missed the ball.");
-                }
+                if (data.type === 'START_GAME') initiateStartGame(false);
+                else if (data.type === 'PASS_BALL') receiveBall(data.ballData, data.currentScore);
+                else if (data.type === 'GAME_OVER_TIME') handleGameOver("You Win! Opponent was too slow.");
+                else if (data.type === 'GAME_OVER_DECOY') handleGameOver("You Win! Opponent tapped a Fake Ball!");
             });
         }
 
-        // --- GAME LOGIC ---
+        // --- GAME LOGIC & PROGRESSION ---
 
-        function startGame(isStartingPlayer) {
+        // Derives color based on speed/score tiers
+        function getBallColor(currentScore) {
+            if (currentScore < 5) return '#1dd1a1'; // Green
+            if (currentScore < 10) return '#00d2d3'; // Cyan
+            if (currentScore < 15) return '#5f27cd'; // Purple
+            return '#feca57'; // Gold
+        }
+
+        // Spawns fake red balls
+        function spawnDecoys(currentScore) {
+            decoys = [];
+            let numDecoys = 0;
+            if (currentScore >= 5) numDecoys = 1;
+            if (currentScore >= 15) numDecoys = 2;
+
+            for(let i=0; i<numDecoys; i++) {
+                decoys.push({
+                    x: ball.r + Math.random() * (canvas.width - 2 * ball.r),
+                    y: ball.r + Math.random() * (canvas.height - 2 * ball.r),
+                    r: ball.r,
+                    dx: (Math.random() > 0.5 ? 2.5 : -2.5), 
+                    dy: (Math.random() > 0.5 ? 2.5 : -2.5),
+                    color: '#ff4757' // Red
+                });
+            }
+        }
+
+        // --- GAME FLOW ---
+
+        function initiateStartGame(startingPlayer) {
             lobbyScreen.classList.add('hidden');
-            score = 0;
-            scoreEl.innerText = score;
-            gameOver = false;
+            turnScreen.classList.remove('hidden');
+            rematchBtn.classList.add('hidden');
+            
+            score = 0; scoreEl.innerText = score;
+            currentMaxTime = 3000;
+            trails = []; particles = []; decoys = [];
+            gameOver = false; gameRunning = false;
+
+            // Start Countdown
+            let count = 3;
+            turnText.innerText = "Game starts in: " + count;
+            
+            let interval = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    turnText.innerText = "Game starts in: " + count;
+                } else if (count === 0) {
+                    turnText.innerText = "GO!";
+                } else {
+                    clearInterval(interval);
+                    finishStartGame(startingPlayer);
+                }
+            }, 1000);
+            
+            if (startingPlayer) connection.send({ type: 'START_GAME' });
+            cancelAnimationFrame(animationId);
+            gameLoop();
+        }
+
+        function finishStartGame(isStartingPlayer) {
             gameRunning = true;
             
             if (isStartingPlayer) {
                 myTurn = true;
                 turnScreen.classList.add('hidden');
-                // Setup default ball
-                ball.x = canvas.width / 2; ball.y = canvas.height / 2;
+                
+                // First random spawn
+                ball.r = 25;
+                ball.x = ball.r + Math.random() * (canvas.width - 2 * ball.r);
+                ball.y = ball.r + Math.random() * (canvas.height - 2 * ball.r);
                 ball.dx = (Math.random() > 0.5 ? 3 : -3);
                 ball.dy = (Math.random() > 0.5 ? 3 : -3);
+                
                 lastTapTime = Date.now();
             } else {
                 myTurn = false;
-                turnScreen.classList.remove('hidden');
                 turnText.innerText = "Opponent's Turn...";
+                timeEl.innerText = "3.0";
             }
-
-            cancelAnimationFrame(animationId);
-            gameLoop();
         }
 
         function passBall() {
             myTurn = false;
-            score++;
-            scoreEl.innerText = score;
+            score++; scoreEl.innerText = score;
             
-            // Speed up the ball
+            // Screen Shake & Particles
+            shakeFrames = 10;
+            createExplosion(ball.x, ball.y, getBallColor(score));
+
+            // Speed up
             ball.dx *= ball.speedMultiplier;
             ball.dy *= ball.speedMultiplier;
 
-            // Show waiting screen
             turnScreen.classList.remove('hidden');
             turnText.innerText = "Opponent's Turn...";
             
-            // Send ball data to opponent
-            connection.send({
-                type: 'PASS_BALL',
-                ballData: ball,
-                currentScore: score
-            });
+            connection.send({ type: 'PASS_BALL', ballData: ball, currentScore: score });
         }
 
         function receiveBall(incomingBall, currentScore) {
-            ball = incomingBall; // Sync ball speed
-            
-            // Spawn ball in center to be fair
-            ball.x = canvas.width / 2;
-            ball.y = canvas.height / 2;
-            
+            ball = incomingBall; 
             score = currentScore;
             scoreEl.innerText = score;
+
+            // Mechanics changes based on score
+            // 1. Shrink Ball (Down to 12px min)
+            ball.r = Math.max(12, 25 - Math.floor(score / 3) * 2);
+            // 2. Shrink Timer (Down to 1.5 seconds min)
+            currentMaxTime = Math.max(1500, 3000 - Math.floor(score / 5) * 300);
+            
+            // Randomize Location
+            ball.x = ball.r + Math.random() * (canvas.width - 2 * ball.r);
+            ball.y = ball.r + Math.random() * (canvas.height - 2 * ball.r);
+            
+            // Randomize Trajectory Angle
+            let currentSpeed = Math.hypot(ball.dx, ball.dy);
+            let angle;
+            do {
+                angle = Math.random() * Math.PI * 2;
+            } while (Math.abs(Math.cos(angle)) < 0.2 || Math.abs(Math.sin(angle)) < 0.2);
+
+            ball.dx = Math.cos(angle) * currentSpeed;
+            ball.dy = Math.sin(angle) * currentSpeed;
+
+            trails = []; // Clear old trails
+            spawnDecoys(score); // Spawn decoys if score is high enough
             
             myTurn = true;
             turnScreen.classList.add('hidden');
-            lastTapTime = Date.now(); // Start the 3 second timer
+            lastTapTime = Date.now(); 
         }
 
+        // --- GAME OVER & REMATCH ---
+
         function handleGameOver(message) {
-            gameRunning = false;
-            gameOver = true;
+            gameRunning = false; gameOver = true; myTurn = false;
+            shakeFrames = 20; // Big shake
+
             turnScreen.classList.remove('hidden');
             turnText.innerText = message;
             
-            // Auto restart to menu after 4 seconds
-            setTimeout(() => {
-                window.location.reload(); 
-            }, 4000);
+            if (isHost) {
+                rematchBtn.classList.remove('hidden');
+            } else {
+                let p = document.createElement('p');
+                p.innerText = "(Waiting for Host to Rematch...)";
+                p.style.fontSize = "16px"; p.style.color = "#ced6e0";
+                turnText.appendChild(p);
+            }
+        }
+
+        rematchBtn.addEventListener('click', () => {
+            initiateStartGame(true);
+        });
+
+        // --- UPDATE & DRAW ---
+
+        function createExplosion(x, y, color) {
+            for(let i=0; i<15; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random()-0.5)*12, vy: (Math.random()-0.5)*12,
+                    alpha: 1, color: color, size: Math.random()*4 + 2
+                });
+            }
         }
 
         function update() {
-            if (!gameRunning || !myTurn) return;
-
-            // Move ball
-            ball.x += ball.dx;
-            ball.y += ball.dy;
-
-            let bounced = false;
-
-            // Bounce off walls
-            if (ball.x - ball.r < 0) { ball.x = ball.r; ball.dx *= -1; bounced = true; }
-            else if (ball.x + ball.r > canvas.width) { ball.x = canvas.width - ball.r; ball.dx *= -1; bounced = true; }
-
-            if (ball.y - ball.r < 0) { ball.y = ball.r; ball.dy *= -1; bounced = true; }
-            else if (ball.y + ball.r > canvas.height) { ball.y = canvas.height - ball.r; ball.dy *= -1; bounced = true; }
-
-            // Speed limit so it doesn't glitch through walls
-            if (bounced) {
-                if (Math.abs(ball.dx) < 15) ball.dx *= ball.speedMultiplier;
-                if (Math.abs(ball.dy) < 15) ball.dy *= ball.speedMultiplier;
+            // Always update particles for explosion effects
+            for(let i = particles.length-1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx; p.y += p.vy;
+                p.alpha -= 0.03;
+                if(p.alpha <= 0) particles.splice(i, 1);
             }
 
-            // Check timer
-            let timeLeft = TIME_LIMIT - (Date.now() - lastTapTime);
+            if (!gameRunning || !myTurn) return;
+
+            // Timer check
+            let timeLeft = currentMaxTime - (Date.now() - lastTapTime);
             if (timeLeft <= 0) {
                 timeLeft = 0;
-                connection.send({ type: 'GAME_OVER' });
+                connection.send({ type: 'GAME_OVER_TIME' });
                 handleGameOver("You Lose! Too slow!");
             }
             timeEl.innerText = (timeLeft / 1000).toFixed(1);
+
+            // Move Main Ball
+            ball.x += ball.dx; ball.y += ball.dy;
+            
+            // Record Trail
+            trails.push({x: ball.x, y: ball.y, r: ball.r, alpha: 0.4});
+            if (trails.length > 8) trails.shift();
+            trails.forEach(t => t.alpha -= 0.05);
+
+            // Bounce Main Ball
+            let bounced = false;
+            if (ball.x - ball.r < 0) { ball.x = ball.r; ball.dx *= -1; bounced = true; }
+            else if (ball.x + ball.r > canvas.width) { ball.x = canvas.width - ball.r; ball.dx *= -1; bounced = true; }
+            if (ball.y - ball.r < 0) { ball.y = ball.r; ball.dy *= -1; bounced = true; }
+            else if (ball.y + ball.r > canvas.height) { ball.y = canvas.height - ball.r; ball.dy *= -1; bounced = true; }
+
+            if (bounced) {
+                shakeFrames = 5; // Mini shake on wall bounce
+                if (Math.abs(ball.dx) < 20) ball.dx *= ball.speedMultiplier;
+                if (Math.abs(ball.dy) < 20) ball.dy *= ball.speedMultiplier;
+            }
+
+            // Move & Bounce Decoys
+            decoys.forEach(decoy => {
+                decoy.x += decoy.dx; decoy.y += decoy.dy;
+                if (decoy.x - decoy.r < 0) { decoy.x = decoy.r; decoy.dx *= -1; }
+                else if (decoy.x + decoy.r > canvas.width) { decoy.x = canvas.width - decoy.r; decoy.dx *= -1; }
+                if (decoy.y - decoy.r < 0) { decoy.y = decoy.r; decoy.dy *= -1; }
+                else if (decoy.y + decoy.r > canvas.height) { decoy.y = canvas.height - decoy.r; decoy.dy *= -1; }
+            });
         }
 
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+            ctx.save();
+            // Screen Shake Effect
+            if (shakeFrames > 0) {
+                let dx = (Math.random()-0.5)*8;
+                let dy = (Math.random()-0.5)*8;
+                ctx.translate(dx, dy);
+                shakeFrames--;
+            }
+
+            // Draw Particles
+            particles.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.alpha;
+                ctx.fill();
+                ctx.globalAlpha = 1; // reset
+            });
+
             if (myTurn && gameRunning) {
+                // Draw Trails
+                trails.forEach(t => {
+                    if(t.alpha <= 0) return;
+                    ctx.beginPath();
+                    ctx.arc(t.x, t.y, t.r, 0, Math.PI * 2);
+                    ctx.fillStyle = getBallColor(score);
+                    ctx.globalAlpha = t.alpha;
+                    ctx.fill();
+                });
+                ctx.globalAlpha = 1;
+
+                // Draw Decoys
+                decoys.forEach(decoy => {
+                    ctx.beginPath();
+                    ctx.arc(decoy.x, decoy.y, decoy.r, 0, Math.PI * 2);
+                    ctx.fillStyle = decoy.color;
+                    ctx.fill();
+                    // Draw a black warning dot inside decoy
+                    ctx.beginPath();
+                    ctx.arc(decoy.x, decoy.y, decoy.r/2, 0, Math.PI * 2);
+                    ctx.fillStyle = '#000000';
+                    ctx.fill();
+                });
+
+                // Draw Main Ball
                 ctx.beginPath();
                 ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
-                ctx.fillStyle = '#1dd1a1';
+                ctx.fillStyle = getBallColor(score);
                 ctx.fill();
                 ctx.closePath();
             }
+            
+            ctx.restore(); // Restores from screen shake transform
         }
 
         function gameLoop() {
             update();
             draw();
-            if (gameRunning) {
-                animationId = requestAnimationFrame(gameLoop);
-            }
+            animationId = requestAnimationFrame(gameLoop); // Loop continuously for particles
         }
 
-        // Tap Logic
+        // --- INPUT HANDLING ---
         function handleInput(clientX, clientY) {
             if (!gameRunning || !myTurn) return;
 
             const rect = canvas.getBoundingClientRect();
             const mouseX = clientX - rect.left;
             const mouseY = clientY - rect.top;
-            const dist = Math.hypot(mouseX - ball.x, mouseY - ball.y);
             
-            // Successful tap!
-            if (dist <= ball.r) {
+            // Check Decoys FIRST (so you can't accidentally get away with a bad tap)
+            for (let i = 0; i < decoys.length; i++) {
+                if (Math.hypot(mouseX - decoys[i].x, mouseY - decoys[i].y) <= decoys[i].r) {
+                    connection.send({ type: 'GAME_OVER_DECOY' });
+                    handleGameOver("You tapped a Fake Ball! You Lose!");
+                    return;
+                }
+            }
+
+            // Check Main Ball
+            if (Math.hypot(mouseX - ball.x, mouseY - ball.y) <= ball.r) {
                 passBall();
             }
         }
