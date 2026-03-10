@@ -107,7 +107,7 @@
         let gameRunning = false;
         let gameOver = false;
         let lastTapTime = Date.now();
-        const TIME_LIMIT = 3000; // Strictly fixed to 3 seconds per turn
+        const TIME_LIMIT = 3000; 
         let animationId;
         
         // Visuals / Entity Arrays
@@ -118,8 +118,7 @@
 
         let ball = {
             x: 200, y: 200, r: 25,
-            dx: 3, dy: 3,
-            speedMultiplier: 1.05
+            dx: 4, dy: 4
         };
 
         // --- FULLSCREEN LOGIC ---
@@ -202,8 +201,8 @@
                     x: ball.r + Math.random() * (canvas.width - 2 * ball.r),
                     y: ball.r + Math.random() * (canvas.height - 2 * ball.r),
                     r: ball.r,
-                    dx: (Math.random() > 0.5 ? 2.5 : -2.5), 
-                    dy: (Math.random() > 0.5 ? 2.5 : -2.5),
+                    dx: (Math.random() > 0.5 ? 3 : -3), 
+                    dy: (Math.random() > 0.5 ? 3 : -3),
                     color: '#ff4757' // Red
                 });
             }
@@ -219,7 +218,7 @@
             score = 0; scoreEl.innerText = score;
             trails = []; particles = []; decoys = [];
             gameOver = false; gameRunning = false;
-            timeEl.innerText = "3.0"; // Reset UI visually
+            timeEl.innerText = "3.0"; 
 
             // Start Countdown
             let count = 3;
@@ -253,10 +252,17 @@
                 ball.r = 25;
                 ball.x = ball.r + Math.random() * (canvas.width - 2 * ball.r);
                 ball.y = ball.r + Math.random() * (canvas.height - 2 * ball.r);
-                ball.dx = (Math.random() > 0.5 ? 3 : -3);
-                ball.dy = (Math.random() > 0.5 ? 3 : -3);
                 
-                lastTapTime = Date.now(); // Start 3.0 seconds!
+                // Set initial starting speed to exactly 4.0
+                let initialSpeed = 4.0;
+                let angle;
+                do { angle = Math.random() * Math.PI * 2; } 
+                while (Math.abs(Math.cos(angle)) < 0.2 || Math.abs(Math.sin(angle)) < 0.2);
+                
+                ball.dx = Math.cos(angle) * initialSpeed;
+                ball.dy = Math.sin(angle) * initialSpeed;
+                
+                lastTapTime = Date.now(); 
             } else {
                 myTurn = false;
                 turnText.innerText = "Opponent's Turn...";
@@ -266,15 +272,11 @@
         function passBall() {
             myTurn = false;
             score++; scoreEl.innerText = score;
-            timeEl.innerText = "3.0"; // Reset visually for the waiting player
+            timeEl.innerText = "3.0"; 
             
             // Screen Shake & Particles
             shakeFrames = 10;
             createExplosion(ball.x, ball.y, getBallColor(score));
-
-            // Speed up
-            ball.dx *= ball.speedMultiplier;
-            ball.dy *= ball.speedMultiplier;
 
             turnScreen.classList.remove('hidden');
             turnText.innerText = "Opponent's Turn...";
@@ -287,30 +289,33 @@
             score = currentScore;
             scoreEl.innerText = score;
 
-            // 1. Shrink Ball (Down to 12px min)
-            ball.r = Math.max(12, 25 - Math.floor(score / 3) * 2);
+            // 1. Shrink Ball slightly (Down to 15px min so it isn't impossible to click)
+            ball.r = Math.max(15, 25 - Math.floor(score / 4) * 2);
             
             // Randomize Location
             ball.x = ball.r + Math.random() * (canvas.width - 2 * ball.r);
             ball.y = ball.r + Math.random() * (canvas.height - 2 * ball.r);
             
+            // --- NEW SPEED LOGIC ---
+            // Base speed is 4.0. Increases by 0.75 exactly every 2 turns.
+            // Capped at a maximum speed of 12.0 so it never glitches or gets entirely impossible.
+            let newSpeed = 4.0 + (Math.floor(score / 2) * 0.75);
+            newSpeed = Math.min(newSpeed, 12.0);
+            
             // Randomize Trajectory Angle
-            let currentSpeed = Math.hypot(ball.dx, ball.dy);
             let angle;
             do {
                 angle = Math.random() * Math.PI * 2;
             } while (Math.abs(Math.cos(angle)) < 0.2 || Math.abs(Math.sin(angle)) < 0.2);
 
-            ball.dx = Math.cos(angle) * currentSpeed;
-            ball.dy = Math.sin(angle) * currentSpeed;
+            ball.dx = Math.cos(angle) * newSpeed;
+            ball.dy = Math.sin(angle) * newSpeed;
 
-            trails = []; // Clear old trails
-            spawnDecoys(score); // Spawn decoys if score is high enough
+            trails = []; 
+            spawnDecoys(score); 
             
             myTurn = true;
             turnScreen.classList.add('hidden');
-            
-            // RESET EXACTLY TO 3.0 SECONDS
             lastTapTime = Date.now(); 
         }
 
@@ -318,7 +323,7 @@
 
         function handleGameOver(message) {
             gameRunning = false; gameOver = true; myTurn = false;
-            shakeFrames = 20; // Big shake
+            shakeFrames = 20;
 
             turnScreen.classList.remove('hidden');
             turnText.innerText = message;
@@ -350,7 +355,6 @@
         }
 
         function update() {
-            // Always update particles for explosion effects
             for(let i = particles.length-1; i >= 0; i--) {
                 let p = particles[i];
                 p.x += p.vx; p.y += p.vy;
@@ -385,9 +389,8 @@
             else if (ball.y + ball.r > canvas.height) { ball.y = canvas.height - ball.r; ball.dy *= -1; bounced = true; }
 
             if (bounced) {
-                shakeFrames = 5; // Mini shake on wall bounce
-                if (Math.abs(ball.dx) < 20) ball.dx *= ball.speedMultiplier;
-                if (Math.abs(ball.dy) < 20) ball.dy *= ball.speedMultiplier;
+                shakeFrames = 5; 
+                // NOTE: Speed no longer increases when hitting walls! It only bounces now.
             }
 
             // Move & Bounce Decoys
@@ -404,7 +407,6 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             ctx.save();
-            // Screen Shake Effect
             if (shakeFrames > 0) {
                 let dx = (Math.random()-0.5)*8;
                 let dy = (Math.random()-0.5)*8;
@@ -412,18 +414,16 @@
                 shakeFrames--;
             }
 
-            // Draw Particles
             particles.forEach(p => {
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
                 ctx.fillStyle = p.color;
                 ctx.globalAlpha = p.alpha;
                 ctx.fill();
-                ctx.globalAlpha = 1; // reset
+                ctx.globalAlpha = 1; 
             });
 
             if (myTurn && gameRunning) {
-                // Draw Trails
                 trails.forEach(t => {
                     if(t.alpha <= 0) return;
                     ctx.beginPath();
@@ -434,20 +434,17 @@
                 });
                 ctx.globalAlpha = 1;
 
-                // Draw Decoys
                 decoys.forEach(decoy => {
                     ctx.beginPath();
                     ctx.arc(decoy.x, decoy.y, decoy.r, 0, Math.PI * 2);
                     ctx.fillStyle = decoy.color;
                     ctx.fill();
-                    // Draw a black warning dot inside decoy
                     ctx.beginPath();
                     ctx.arc(decoy.x, decoy.y, decoy.r/2, 0, Math.PI * 2);
                     ctx.fillStyle = '#000000';
                     ctx.fill();
                 });
 
-                // Draw Main Ball
                 ctx.beginPath();
                 ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
                 ctx.fillStyle = getBallColor(score);
@@ -455,13 +452,13 @@
                 ctx.closePath();
             }
             
-            ctx.restore(); // Restores from screen shake transform
+            ctx.restore(); 
         }
 
         function gameLoop() {
             update();
             draw();
-            animationId = requestAnimationFrame(gameLoop); // Loop continuously for particles
+            animationId = requestAnimationFrame(gameLoop); 
         }
 
         // --- INPUT HANDLING ---
@@ -472,7 +469,6 @@
             const mouseX = clientX - rect.left;
             const mouseY = clientY - rect.top;
             
-            // Check Decoys FIRST (so you can't accidentally get away with a bad tap)
             for (let i = 0; i < decoys.length; i++) {
                 if (Math.hypot(mouseX - decoys[i].x, mouseY - decoys[i].y) <= decoys[i].r) {
                     connection.send({ type: 'GAME_OVER_DECOY' });
@@ -481,7 +477,6 @@
                 }
             }
 
-            // Check Main Ball
             if (Math.hypot(mouseX - ball.x, mouseY - ball.y) <= ball.r) {
                 passBall();
             }
