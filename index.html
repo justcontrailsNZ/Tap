@@ -47,7 +47,7 @@
         button.primary { background-color: #5f27cd; font-size: 18px;}
         button.primary:hover { background-color: #341f97; }
         
-        #status-text { font-size: 18px; color: #ced6e0; text-align: center; padding: 20px;}
+        #status-text { font-size: 18px; color: #ced6e0; text-align: center; padding: 20px; line-height: 1.4; }
         #room-code-display { font-size: 36px; color: #ff9f43; font-weight: bold; letter-spacing: 2px; margin: 10px 0; }
         #turn-text { font-size: 28px; color: #ff9f43; text-align: center; padding: 0 10px; }
         
@@ -89,10 +89,10 @@
 
         <!-- Lobby Screen -->
         <div id="lobby-screen" class="overlay hidden">
-            <div id="status-text">Connecting to server...</div>
+            <div id="status-text">Connecting to matchmaking server...</div>
             <div id="room-code-display" class="hidden"></div>
             <div id="waiting-text" class="hidden">Waiting for opponent to join...</div>
-            <button id="cancel-btn" class="secondary" style="margin-top: 20px;">Cancel</button>
+            <button id="cancel-btn" class="secondary" style="margin-top: 20px;">Back to Menu</button>
         </div>
 
         <!-- Info / Turn / Game Over Screen -->
@@ -124,7 +124,7 @@
         const backMenuBtn = document.getElementById('back-menu-btn');
 
         // Multiplayer / Mode Variables
-        let peer, connection;
+        let peer, connection, connectionTimeout;
         let myId = Math.random().toString(36).substring(2, 7).toUpperCase(); 
         let isHost = false;
         let isSinglePlayer = false;
@@ -143,35 +143,43 @@
         let shakeFrames = 0;
         let ball = { x: 250, y: 250, r: 30, dx: 3, dy: 3 };
 
-        // Sound Synthesis Setup
+        // --- SAFE SOUND SETUP (Prevents Browser Crashes) ---
         let audioCtx;
         function initAudio() {
-            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            if (audioCtx.state === 'suspended') audioCtx.resume();
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContext) return; // Silent mode if not supported
+                if (!audioCtx) audioCtx = new AudioContext();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+            } catch (e) {
+                console.warn("Audio disabled or blocked by browser.");
+            }
         }
 
         function playSound(type) {
-            if (!audioCtx) return;
-            const osc = audioCtx.createOscillator();
-            const gainNode = audioCtx.createGain();
-            osc.connect(gainNode); gainNode.connect(audioCtx.destination);
-            const now = audioCtx.currentTime;
+            try {
+                if (!audioCtx) return;
+                const osc = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                osc.connect(gainNode); gainNode.connect(audioCtx.destination);
+                const now = audioCtx.currentTime;
 
-            if (type === 'tap') {
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(600 + (score * 20), now); 
-                osc.frequency.exponentialRampToValueAtTime(1000, now + 0.1);
-                gainNode.gain.setValueAtTime(0.5, now);
-                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-                osc.start(now); osc.stop(now + 0.1);
-            } else if (type === 'lose') {
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(150, now);
-                osc.frequency.exponentialRampToValueAtTime(40, now + 0.5);
-                gainNode.gain.setValueAtTime(0.5, now);
-                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
-                osc.start(now); osc.stop(now + 0.5);
-            }
+                if (type === 'tap') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(600 + (score * 20), now); 
+                    osc.frequency.exponentialRampToValueAtTime(1000, now + 0.1);
+                    gainNode.gain.setValueAtTime(0.5, now);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                    osc.start(now); osc.stop(now + 0.1);
+                } else if (type === 'lose') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(150, now);
+                    osc.frequency.exponentialRampToValueAtTime(40, now + 0.5);
+                    gainNode.gain.setValueAtTime(0.5, now);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                    osc.start(now); osc.stop(now + 0.5);
+                }
+            } catch (e) {} // Catch any playback errors harmlessly
         }
 
         // --- UI NAVIGATION ---
@@ -196,20 +204,30 @@
             initAudio(); 
             isSinglePlayer = false; isHost = true;
             menuScreen.classList.add('hidden'); lobbyScreen.classList.remove('hidden');
-            statusText.innerText = "Connecting to matchmaking server...";
+            statusText.innerHTML = "Connecting to matchmaking server...<br><br><small>(This can take a moment)</small>";
             
-            peer = new Peer(myId);
-            peer.on('open', (id) => {
-                statusText.innerText = "Room Created! Share this code:";
-                roomCodeDisplay.innerText = id;
-                roomCodeDisplay.classList.remove('hidden');
-                waitingText.classList.remove('hidden');
-            });
-            peer.on('connection', (conn) => {
-                connection = conn; setupConnection();
-                setTimeout(() => initiateStartGame(true), 1000);
-            });
-            peer.on('error', handleNetworkError);
+            // Server Error Fallback
+            connectionTimeout = setTimeout(() => {
+                handleNetworkError("Server Timeout. The public PeerJS server is currently unavailable.");
+            }, 8000);
+
+            try {
+                peer = new Peer(myId);
+                peer.on('open', (id) => {
+                    clearTimeout(connectionTimeout);
+                    statusText.innerText = "Room Created! Share this code:";
+                    roomCodeDisplay.innerText = id;
+                    roomCodeDisplay.classList.remove('hidden');
+                    waitingText.classList.remove('hidden');
+                });
+                peer.on('connection', (conn) => {
+                    connection = conn; setupConnection();
+                    setTimeout(() => initiateStartGame(true), 1000);
+                });
+                peer.on('error', handleNetworkError);
+            } catch (e) {
+                handleNetworkError("WebRTC is blocked or not supported on this browser.");
+            }
         });
 
         document.getElementById('join-btn').addEventListener('click', () => {
@@ -221,15 +239,24 @@
             menuScreen.classList.add('hidden'); lobbyScreen.classList.remove('hidden');
             statusText.innerText = "Connecting to Host...";
 
-            peer = new Peer(); 
-            peer.on('open', () => {
-                connection = peer.connect(joinId);
-                connection.on('open', () => {
-                    setupConnection();
-                    statusText.innerText = "Connected! Waiting for host to start...";
+            connectionTimeout = setTimeout(() => {
+                handleNetworkError("Could not find a host with that code.");
+            }, 8000);
+
+            try {
+                peer = new Peer(); 
+                peer.on('open', () => {
+                    connection = peer.connect(joinId);
+                    connection.on('open', () => {
+                        clearTimeout(connectionTimeout);
+                        setupConnection();
+                        statusText.innerText = "Connected! Waiting for host to start...";
+                    });
                 });
-            });
-            peer.on('error', handleNetworkError);
+                peer.on('error', handleNetworkError);
+            } catch (e) {
+                handleNetworkError("WebRTC is blocked or not supported on this browser.");
+            }
         });
 
         function setupConnection() {
@@ -246,8 +273,9 @@
         }
 
         function handleNetworkError(err) {
-            console.error(err);
-            statusText.innerText = "Server Error. The public server might be busy. Please try Single Player.";
+            clearTimeout(connectionTimeout);
+            console.warn(err);
+            statusText.innerHTML = `<span style="color:#ff4757;">Network Error:</span><br> ${err}<br><br>Please try Single Player instead.`;
             roomCodeDisplay.classList.add('hidden');
             waitingText.classList.add('hidden');
         }
@@ -414,38 +442,4 @@
 
         // --- UPDATE & DRAW ---
         function createExplosion(x, y, color) {
-            for(let i=0; i<15; i++) {
-                particles.push({
-                    x: x, y: y, vx: (Math.random()-0.5)*15, vy: (Math.random()-0.5)*15,
-                    alpha: 1, color: color, size: Math.random()*5 + 3
-                });
-            }
-        }
-
-        function update() {
-            for(let i = particles.length-1; i >= 0; i--) {
-                let p = particles[i];
-                p.x += p.vx; p.y += p.vy; p.alpha -= 0.03;
-                if(p.alpha <= 0) particles.splice(i, 1);
-            }
-
-            floatingTexts.forEach(ft => { ft.y -= 2; ft.alpha -= 0.02; });
-            floatingTexts = floatingTexts.filter(ft => ft.alpha > 0);
-
-            if (!gameRunning || !myTurn) return;
-
-            let timeLeft = currentTimeLimit - (Date.now() - lastTapTime);
-            if (timeLeft <= 0) {
-                timeLeft = 0;
-                if (!isSinglePlayer && connection) connection.send({ type: 'GAME_OVER_TIME' });
-                handleGameOver("You Lose! Too slow!");
-            }
-            timeEl.innerText = (timeLeft / 1000).toFixed(1);
-
-            ball.x += ball.dx; ball.y += ball.dy;
-            trails.push({x: ball.x, y: ball.y, r: ball.r, alpha: 0.4});
-            if (trails.length > 8) trails.shift();
-            trails.forEach(t => t.alpha -= 0.05);
-
-            if (ball.x - ball.r < 0) { ball.x = ball.r; ball.dx *= -1; shakeFrames = 4; }
-            else if (ball.x + ball.r > canvas.width) { ball.x = canvas.width - ball.r; ball.dx *= -1; shakeFrames
+            for(let i=0;
