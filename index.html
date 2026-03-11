@@ -3,27 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multiplayer Ball Tap - Balanced</title>
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#1e1e2f">
+    <title>Multiplayer Ball Tap - Balanced & Juiced</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         body {
             display: flex; flex-direction: column; justify-content: center; align-items: center;
             height: 100vh; margin: 0; background-color: #1e1e2f; color: #ffffff;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden;
+            
+            /* IMPROVEMENT 6: Prevent text selection/highlighting on mobile when furiously tapping */
+            user-select: none;
+            -webkit-user-select: none;
         }
+        
         #game-ui { text-align: center; margin-bottom: 10px; }
         h1 { margin: 0 0 5px 0; font-size: 24px; }
         .stats { font-size: 18px; font-weight: bold; }
         #time { color: #ff4757; }
         
-        /* RESPONSIVE CONTAINER - Automatically scales to the device screen */
+        /* RESPONSIVE CONTAINER */
         #game-container { 
             position: relative; 
             width: 92vw; 
             max-width: 500px; 
-            aspect-ratio: 1 / 1; /* Forces it to remain a perfect square */
+            aspect-ratio: 1 / 1; 
         }
         
         /* CANVAS STYLES */
@@ -55,6 +58,12 @@
         #status-text { font-size: 20px; color: #ced6e0; text-align: center; padding: 20px;}
         #room-code-display { font-size: 36px; color: #ff9f43; font-weight: bold; letter-spacing: 2px; margin: 10px 0; }
         #turn-text { font-size: 28px; color: #ff9f43; text-align: center; padding: 0 10px; }
+        
+        /* IMPROVEMENT 6: Tutorial Text styling */
+        .tutorial-text {
+            font-size: 14px; color: #a4b0be; text-align: center; 
+            margin-bottom: 20px; line-height: 1.5; max-width: 80%;
+        }
     </style>
 </head>
 <body>
@@ -70,6 +79,12 @@
     <div id="game-container">
         <!-- Main Menu -->
         <div id="menu-screen" class="overlay">
+            <!-- IMPROVEMENT 6: Added Tutorial Text -->
+            <p class="tutorial-text">
+                <strong>How to play:</strong><br>
+                Tap the colored ball before time runs out!<br>
+                Avoid the red decoys. The timer speeds up as you score.
+            </p>
             <button id="host-btn">Host Game</button>
             <div style="margin: 15px 0;">-- OR --</div>
             <input type="text" id="join-input" placeholder="ROOM CODE" maxlength="5">
@@ -90,7 +105,6 @@
             <button id="rematch-btn" class="hidden">Play Again (Rematch)</button>
         </div>
 
-        <!-- Canvas (Internal logic resolution bumped to 500x500 for crisp visuals on big screens) -->
         <canvas id="gameCanvas" width="500" height="500"></canvas>
     </div>
 
@@ -120,19 +134,52 @@
         let gameRunning = false;
         let gameOver = false;
         let lastTapTime = Date.now();
-        const TIME_LIMIT = 3000; 
+        let currentTimeLimit = 3000; // IMPROVEMENT 6: Dynamic Difficulty
         let animationId;
         
         // Visuals / Entity Arrays
         let particles = [];
         let trails = [];
         let decoys = [];
+        let floatingTexts = []; // IMPROVEMENT 5: Floating text array
         let shakeFrames = 0;
 
-        let ball = {
-            x: 250, y: 250, r: 30, // Base size updated for 500x500 resolution
-            dx: 3, dy: 3
-        };
+        let ball = { x: 250, y: 250, r: 30, dx: 3, dy: 3 };
+
+        // IMPROVEMENT 1: Sound Synthesis Setup
+        let audioCtx;
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playSound(type) {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            const now = audioCtx.currentTime;
+
+            if (type === 'tap') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600 + (score * 20), now); // Pitch rises with score
+                osc.frequency.exponentialRampToValueAtTime(1000, now + 0.1);
+                gainNode.gain.setValueAtTime(0.5, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc.start(now); osc.stop(now + 0.1);
+            } else if (type === 'lose') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.exponentialRampToValueAtTime(40, now + 0.5);
+                gainNode.gain.setValueAtTime(0.5, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                osc.start(now); osc.stop(now + 0.5);
+            }
+        }
 
         // --- FULLSCREEN LOGIC ---
         document.getElementById('fullscreen-btn').addEventListener('click', () => {
@@ -145,6 +192,7 @@
 
         // --- MULTIPLAYER SETUP ---
         document.getElementById('host-btn').addEventListener('click', () => {
+            initAudio(); // Initialize audio context on user interaction
             isHost = true;
             menuScreen.classList.add('hidden');
             lobbyScreen.classList.remove('hidden');
@@ -162,9 +210,11 @@
                 setupConnection();
                 setTimeout(() => initiateStartGame(true), 1000);
             });
+            peer.on('error', handleDisconnect);
         });
 
         document.getElementById('join-btn').addEventListener('click', () => {
+            initAudio(); // Initialize audio context on user interaction
             const joinId = document.getElementById('join-input').value.trim().toUpperCase();
             if (joinId.length !== 5) { alert("Enter a valid 5-letter code."); return; }
 
@@ -181,6 +231,7 @@
                     statusText.innerText = "Connected! Waiting for host to start...";
                 });
             });
+            peer.on('error', handleDisconnect);
         });
 
         function setupConnection() {
@@ -190,29 +241,75 @@
                 else if (data.type === 'GAME_OVER_TIME') handleGameOver("You Win! Opponent was too slow.");
                 else if (data.type === 'GAME_OVER_DECOY') handleGameOver("You Win! Opponent tapped a Fake Ball!");
             });
+
+            // IMPROVEMENT 4: Handle Opponent Disconnects gracefully
+            connection.on('close', handleDisconnect);
+        }
+
+        function handleDisconnect() {
+            if (!gameRunning && !gameOver && lobbyScreen.classList.contains('hidden')) return;
+            handleGameOver("Opponent Disconnected!");
+            rematchBtn.classList.add('hidden'); 
+            
+            if (!document.getElementById('back-btn')) {
+                const backBtn = document.createElement('button');
+                backBtn.id = 'back-btn';
+                backBtn.innerText = "Back to Menu";
+                backBtn.onclick = () => location.reload();
+                turnText.appendChild(document.createElement('br'));
+                turnText.appendChild(backBtn);
+            }
         }
 
         // --- GAME LOGIC & PROGRESSION ---
 
-        function getBallColor(currentScore) {
-            if (currentScore < 5) return '#1dd1a1'; // Green
-            if (currentScore < 10) return '#00d2d3'; // Cyan
-            if (currentScore < 15) return '#5f27cd'; // Purple
-            return '#feca57'; // Gold
+        // IMPROVEMENT 6: Dynamic Difficulty updates the timer length based on score
+        function updateDifficulty() {
+            currentTimeLimit = Math.max(1000, 3000 - (score * 50));
+            timeEl.innerText = (currentTimeLimit / 1000).toFixed(1);
         }
 
-        function spawnDecoys(currentScore) {
+        function getBallColor(currentScore) {
+            if (currentScore < 5) return '#1dd1a1'; 
+            if (currentScore < 10) return '#00d2d3'; 
+            if (currentScore < 15) return '#5f27cd'; 
+            return '#feca57'; 
+        }
+
+        // IMPROVEMENT 3: Safe Spawning Helper Function
+        function getSafeSpawnPoint(radius, avoidList = []) {
+            let x, y, safe;
+            let attempts = 0;
+            do {
+                safe = true;
+                x = radius + Math.random() * (canvas.width - 2 * radius);
+                y = radius + Math.random() * (canvas.height - 2 * radius);
+                
+                for (let item of avoidList) {
+                    // Check if newly generated coords overlap with existing entities (with a buffer)
+                    if (Math.hypot(x - item.x, y - item.y) < (radius + item.r + 30)) {
+                        safe = false; 
+                        break;
+                    }
+                }
+                attempts++;
+            } while (!safe && attempts < 100); // Max 100 attempts to avoid infinite loops
+            return { x, y };
+        }
+
+        function spawnDecoys(currentScore, mainBall) {
             decoys = [];
             let numDecoys = 0;
             if (currentScore >= 5) numDecoys = 1;
             if (currentScore >= 15) numDecoys = 2;
 
             for(let i=0; i<numDecoys; i++) {
+                // Determine a location that avoids the main ball and previously placed decoys
+                let avoidList = [...decoys, mainBall];
+                let safePos = getSafeSpawnPoint(ball.r, avoidList);
+                
                 decoys.push({
-                    x: ball.r + Math.random() * (canvas.width - 2 * ball.r),
-                    y: ball.r + Math.random() * (canvas.height - 2 * ball.r),
-                    r: ball.r,
-                    // Decoys move slower so they don't cover the screen instantly
+                    x: safePos.x, y: safePos.y, r: ball.r,
                     dx: (Math.random() > 0.5 ? 2.5 : -2.5), 
                     dy: (Math.random() > 0.5 ? 2.5 : -2.5),
                     color: '#ff4757' 
@@ -228,9 +325,9 @@
             rematchBtn.classList.add('hidden');
             
             score = 0; scoreEl.innerText = score;
-            trails = []; particles = []; decoys = [];
+            trails = []; particles = []; decoys = []; floatingTexts = [];
             gameOver = false; gameRunning = false;
-            timeEl.innerText = "3.0"; 
+            updateDifficulty();
 
             let count = 3;
             turnText.innerText = "Game starts in: " + count;
@@ -259,11 +356,10 @@
                 myTurn = true;
                 turnScreen.classList.add('hidden');
                 
-                ball.r = 30; // Starting radius
+                ball.r = 30;
                 ball.x = ball.r + Math.random() * (canvas.width - 2 * ball.r);
                 ball.y = ball.r + Math.random() * (canvas.height - 2 * ball.r);
                 
-                // Set initial starting speed to a slow 3.0
                 let initialSpeed = 3.0;
                 let angle;
                 do { angle = Math.random() * Math.PI * 2; } 
@@ -280,9 +376,13 @@
         }
 
         function passBall() {
+            playSound('tap'); // SOUND IMPROVEMENT
             myTurn = false;
             score++; scoreEl.innerText = score;
-            timeEl.innerText = "3.0"; 
+            updateDifficulty(); 
+            
+            // IMPROVEMENT 5: Add Floating Text
+            floatingTexts.push({ x: ball.x, y: ball.y, text: `+${score}`, alpha: 1.0 });
             
             shakeFrames = 10;
             createExplosion(ball.x, ball.y, getBallColor(score));
@@ -297,16 +397,14 @@
             ball = incomingBall; 
             score = currentScore;
             scoreEl.innerText = score;
+            updateDifficulty();
 
-            // Shrink ball slightly based on score
             ball.r = Math.max(15, 30 - Math.floor(score / 4) * 2);
             
-            // Randomize Location
+            // Randomize ball location 
             ball.x = ball.r + Math.random() * (canvas.width - 2 * ball.r);
             ball.y = ball.r + Math.random() * (canvas.height - 2 * ball.r);
             
-            // --- UPDATED SLOWER SPEED MATH ---
-            // Base speed 3.0. Increases by a tiny 0.25 every 3 turns. Max cap is heavily reduced to 8.0.
             let newSpeed = 3.0 + (Math.floor(score / 3) * 0.25);
             newSpeed = Math.min(newSpeed, 8.0);
             
@@ -319,7 +417,7 @@
             ball.dy = Math.sin(angle) * newSpeed;
 
             trails = []; 
-            spawnDecoys(score); 
+            spawnDecoys(score, ball); // Safe spawning passes ball state
             
             myTurn = true;
             turnScreen.classList.add('hidden');
@@ -327,6 +425,7 @@
         }
 
         function handleGameOver(message) {
+            playSound('lose'); // SOUND IMPROVEMENT
             gameRunning = false; gameOver = true; myTurn = false;
             shakeFrames = 20;
 
@@ -367,10 +466,13 @@
                 if(p.alpha <= 0) particles.splice(i, 1);
             }
 
+            // Update floating texts
+            floatingTexts.forEach(ft => { ft.y -= 2; ft.alpha -= 0.02; });
+            floatingTexts = floatingTexts.filter(ft => ft.alpha > 0);
+
             if (!gameRunning || !myTurn) return;
 
-            // Timer check
-            let timeLeft = TIME_LIMIT - (Date.now() - lastTapTime);
+            let timeLeft = currentTimeLimit - (Date.now() - lastTapTime);
             if (timeLeft <= 0) {
                 timeLeft = 0;
                 connection.send({ type: 'GAME_OVER_TIME' });
@@ -386,119 +488,7 @@
             if (trails.length > 8) trails.shift();
             trails.forEach(t => t.alpha -= 0.05);
 
-            // Bounce Main Ball off walls
+            // Bounce Main Ball
             if (ball.x - ball.r < 0) { ball.x = ball.r; ball.dx *= -1; shakeFrames = 4; }
             else if (ball.x + ball.r > canvas.width) { ball.x = canvas.width - ball.r; ball.dx *= -1; shakeFrames = 4; }
-            if (ball.y - ball.r < 0) { ball.y = ball.r; ball.dy *= -1; shakeFrames = 4; }
-            else if (ball.y + ball.r > canvas.height) { ball.y = canvas.height - ball.r; ball.dy *= -1; shakeFrames = 4; }
-
-            // Move & Bounce Decoys
-            decoys.forEach(decoy => {
-                decoy.x += decoy.dx; decoy.y += decoy.dy;
-                if (decoy.x - decoy.r < 0) { decoy.x = decoy.r; decoy.dx *= -1; }
-                else if (decoy.x + decoy.r > canvas.width) { decoy.x = canvas.width - decoy.r; decoy.dx *= -1; }
-                if (decoy.y - decoy.r < 0) { decoy.y = decoy.r; decoy.dy *= -1; }
-                else if (decoy.y + decoy.r > canvas.height) { decoy.y = canvas.height - decoy.r; decoy.dy *= -1; }
-            });
-        }
-
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            ctx.save();
-            if (shakeFrames > 0) {
-                let dx = (Math.random()-0.5)*8;
-                let dy = (Math.random()-0.5)*8;
-                ctx.translate(dx, dy);
-                shakeFrames--;
-            }
-
-            particles.forEach(p => {
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
-                ctx.fillStyle = p.color;
-                ctx.globalAlpha = p.alpha;
-                ctx.fill();
-                ctx.globalAlpha = 1; 
-            });
-
-            if (myTurn && gameRunning) {
-                trails.forEach(t => {
-                    if(t.alpha <= 0) return;
-                    ctx.beginPath();
-                    ctx.arc(t.x, t.y, t.r, 0, Math.PI * 2);
-                    ctx.fillStyle = getBallColor(score);
-                    ctx.globalAlpha = t.alpha;
-                    ctx.fill();
-                });
-                ctx.globalAlpha = 1;
-
-                decoys.forEach(decoy => {
-                    ctx.beginPath();
-                    ctx.arc(decoy.x, decoy.y, decoy.r, 0, Math.PI * 2);
-                    ctx.fillStyle = decoy.color;
-                    ctx.fill();
-                    ctx.beginPath();
-                    ctx.arc(decoy.x, decoy.y, decoy.r/2, 0, Math.PI * 2);
-                    ctx.fillStyle = '#000000';
-                    ctx.fill();
-                });
-
-                ctx.beginPath();
-                ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
-                ctx.fillStyle = getBallColor(score);
-                ctx.fill();
-                ctx.closePath();
-            }
-            
-            ctx.restore(); 
-        }
-
-        function gameLoop() {
-            update();
-            draw();
-            animationId = requestAnimationFrame(gameLoop); 
-        }
-
-        // --- INPUT HANDLING WITH RESPONSIVE SCALE MAPPING ---
-        function handleInput(clientX, clientY) {
-            if (!gameRunning || !myTurn) return;
-
-            // Get the physical boundaries of the canvas on the screen
-            const rect = canvas.getBoundingClientRect();
-            
-            // Calculate the scaling factor (Since CSS resizes the canvas dynamically)
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            
-            // Map the physical screen tap to the internal 500x500 coordinates
-            const mouseX = (clientX - rect.left) * scaleX;
-            const mouseY = (clientY - rect.top) * scaleY;
-            
-            for (let i = 0; i < decoys.length; i++) {
-                if (Math.hypot(mouseX - decoys[i].x, mouseY - decoys[i].y) <= decoys[i].r) {
-                    connection.send({ type: 'GAME_OVER_DECOY' });
-                    handleGameOver("You tapped a Fake Ball! You Lose!");
-                    return;
-                }
-            }
-
-            if (Math.hypot(mouseX - ball.x, mouseY - ball.y) <= ball.r) {
-                passBall();
-            }
-        }
-
-        canvas.addEventListener('mousedown', (e) => handleInput(e.clientX, e.clientY));
-        canvas.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            handleInput(e.touches[0].clientX, e.touches[0].clientY);
-        });
-    <script>
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('sw.js')
-            .then(() => console.log('Service Worker Registered'))
-            .catch(err => console.log('Service Worker Failed', err));
-    }
-</script>
-</body>
-</html>
+            if (ball.y - ball.r < 0) { ball.y = ball.r; ball.dy *= -1; shakeFrames
