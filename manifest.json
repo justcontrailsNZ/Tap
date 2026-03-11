@@ -1,0 +1,21 @@
+{
+  "name": "Multiplayer Ball Tap",
+  "short_name": "BallTap",
+  "start_url": "./index.html",
+  "display": "fullscreen",
+  "background_color": "#1e1e2f",
+  "theme_color": "#1dd1a1",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
